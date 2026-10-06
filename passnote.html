@@ -1,10 +1,10 @@
 <!doctype html>
-<!-- passnote：ブラウザで開く、自分用のパスワード帳 https://github.com/oha-yo/passnote -->
+<!-- passnote：ブラウザで開く、自分用の接続情報（http・ssh・データベース）のメモ https://github.com/oha-yo/passnote -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>パスワード帳</title>
+<title>接続情報</title>
 <style>
   :root {
     --bg: #f5f6f8; --panel: #ffffff; --text: #1f2328; --muted: #656d76; --line: #d8dee4;
@@ -31,7 +31,7 @@
   input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
-  .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 16px; }
   .center { max-width: 420px; margin: 12vh auto 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
   .center h1 { margin: 0 0 8px; font-size: 22px; }
   .note { font-size: 13px; color: var(--muted); }
@@ -42,17 +42,19 @@
   header.bar input { flex: 1 1 200px; width: auto; }
   .list { display: grid; gap: 10px; }
   .item { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
-  .item .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  /* 1件を1行に。列（種類・名前など・接続先・ユーザー・パスワード・編集）の幅を決めて、行ごとに縦をそろえる */
+  .item .head { display: grid; grid-template-columns: 18px minmax(12em, 1fr) 18em 12em 13em 24px; gap: 8px 12px; align-items: center; }
+  .item .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .item .name { font-weight: 600; font-size: 16px; }
   .item .name a { color: var(--accent); text-decoration: none; }
   .chip { background: var(--chip); border-radius: 999px; padding: 0 10px; font-size: 12px; color: var(--muted); }
   .chip.high { color: var(--danger); }
   .item .spacer { flex: 1; }
   /* ユーザー・パスワードは、1行の右寄りにまとめて置く（間を少し空ける） */
-  .item .part { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 16px; }
-  .item .part.user { min-width: 18em; }   /* ユーザー名が短くても幅を取り、行ごとの位置をそろえる */
+  .item .part { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .item .k { font-size: 12px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
   .item .v { font-family: Consolas, "BIZ UDGothic", monospace; overflow-wrap: anywhere; }
+  .item .where .v, .item .user .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* 長いときは省略（マウスを乗せると全文） */
   .ib { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
     border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); flex: none; }
   .ib:hover { border-color: var(--line); background: var(--chip); color: var(--accent); }
@@ -68,6 +70,20 @@
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); }
   .toast.show { opacity: .95; }
+  .types { display: flex; flex-wrap: wrap; gap: 6px; }
+  .types .type { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 12px; border: 1px solid var(--line);
+    border-radius: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .types .type input { width: auto; margin: 0; }
+  .types .type:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+  .ti { display: inline-flex; width: 18px; height: 18px; flex: none; }
+  .ti svg { width: 100%; height: 100%; }
+  .item .ti { color: var(--muted); }
+  /* 狭い画面では、列をやめて折り返す */
+  @media (max-width: 860px) {
+    .item .head { display: flex; flex-wrap: wrap; }
+    .item .title { flex: 1 1 calc(100% - 30px); }   /* 種類のアイコンと同じ行に */
+    .item .part:empty { display: none; }
+  }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -75,7 +91,7 @@
 
 <!-- 初回：マスターパスワードの設定 -->
 <section id="setup" class="center hidden">
-  <h1>パスワード帳をはじめる</h1>
+  <h1><span class="app-name">接続情報</span>をはじめる</h1>
   <p class="note">最初に<strong>マスターパスワード</strong>を決めます。中身はこのパスワードで暗号化して、このブラウザの中に保存します。</p>
   <p class="note"><strong>マスターパスワードを忘れると、中身は二度と取り出せません。</strong></p>
   <label for="setup-pw1">マスターパスワード</label>
@@ -91,7 +107,7 @@
 
 <!-- ロック画面 -->
 <section id="lock" class="center hidden">
-  <h1>パスワード帳</h1>
+  <h1 class="app-name">接続情報</h1>
   <p class="note">マスターパスワードを入れてください。</p>
   <label for="lock-pw">マスターパスワード</label>
   <input id="lock-pw" type="password" autocomplete="current-password">
@@ -103,8 +119,8 @@
 <!-- 一覧 -->
 <main id="app" class="wrap hidden">
   <header class="bar">
-    <h1>パスワード帳</h1>
-    <input id="search" type="search" placeholder="検索（名前・分類・ユーザー・メモ）">
+    <h1 class="app-name">接続情報</h1>
+    <input id="search" type="search" placeholder="検索（名前・接続先・分類・ユーザー・メモ）">
     <button class="primary" id="btn-add">＋ 追加</button>
     <button id="btn-menu">その他</button>
     <button id="btn-lock">ロック</button>
@@ -117,10 +133,26 @@
 <dialog id="edit">
   <form method="dialog" id="edit-form">
     <h2 id="edit-title">追加</h2>
+    <label>種類</label>
+    <div class="types" role="radiogroup" aria-label="種類">
+      <label class="type"><input type="radio" name="f-type" value="http"><span class="ti" data-type="http"></span>Web（http）</label>
+      <label class="type"><input type="radio" name="f-type" value="ssh"><span class="ti" data-type="ssh"></span>SSH</label>
+      <label class="type"><input type="radio" name="f-type" value="db"><span class="ti" data-type="db"></span>データベース（PostgreSQL）</label>
+    </div>
     <label for="f-name">名前（サービス・機器など）</label>
     <input id="f-name" required>
-    <label for="f-url">URL（任意）</label>
-    <input id="f-url" placeholder="https://...">
+    <div data-for="http">
+      <label for="f-url">URL（任意）</label>
+      <input id="f-url" placeholder="https://...">
+    </div>
+    <div data-for="ssh db" class="row" style="align-items:flex-end">
+      <div style="flex:1"><label for="f-host">ホスト（名前か IP アドレス）</label><input id="f-host" placeholder="例: db01.example.local、192.168.0.10" autocomplete="off"></div>
+      <div style="width:7em"><label for="f-port">ポート</label><input id="f-port" inputmode="numeric" autocomplete="off"></div>
+    </div>
+    <div data-for="db">
+      <label for="f-db">データベース名</label>
+      <input id="f-db" autocomplete="off">
+    </div>
     <label for="f-user">ユーザー名 / ID</label>
     <input id="f-user" autocomplete="off">
     <label for="f-pass">パスワード</label>
@@ -185,7 +217,7 @@
   <form method="dialog" id="reset-form">
     <h2>マスターパスワードを忘れた場合</h2>
     <p class="note">中身はマスターパスワードで暗号化しているので、パスワードがわからないと<strong>取り出す方法はありません</strong>（作った本人でも、です）。</p>
-    <p class="note">初期化すると、このブラウザに保存しているパスワード帳を消して、新しいマスターパスワードで始め直せます。</p>
+    <p class="note">初期化すると、このブラウザに保存している<span class="app-name">接続情報</span>を消して、新しいマスターパスワードで始め直せます。</p>
     <p class="note">消す前に、今の中身を<strong>暗号化したまま</strong>ファイルに保存します（ダウンロードのフォルダに <code>pass-note-backup-before-reset-日付.json</code>）。あとでマスターパスワードを思い出したら、「バックアップから復元」で元に戻せます。</p>
     <label for="reset-confirm">確認のため「初期化する」と入力してください</label>
     <input id="reset-confirm" autocomplete="off">
@@ -203,7 +235,8 @@
 'use strict';
 // 中身は AES-GCM（256bit）で暗号化し、鍵はマスターパスワードから PBKDF2-SHA256（60 万回）で作る。
 // 暗号化したものだけを localStorage に保存する。平文は画面を開いている間のメモリにしか置かない。
-const STORE_KEY = 'pass-note-vault-v1';
+const APP_NAME = '接続情報';             // 画面に出す名前（仮称）。変えるときはここだけ直す
+const STORE_KEY = 'pass-note-vault-v1';   // 保存のキーは、すでにデータが入っているので変えない
 const ITERATIONS = 600000;
 const CLIPBOARD_CLEAR_MS = 30000;
 const IDLE_LOCK_MS = 5 * 60 * 1000;
@@ -339,7 +372,7 @@ function render() {
   if (!session) return;
   const q = $('search').value.trim().toLowerCase();
   const items = session.entries
-    .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url].some(s => (s || '').toLowerCase().includes(q)))
+    .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)))
     .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja'));
 
   $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
@@ -358,18 +391,47 @@ const ICONS = {
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  // 種類のアイコン
+  http: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  ssh: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
+  db: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
 };
+const svg = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+
+// ---- 接続の種類 ----
+// 以前のデータには type がないので、http として扱う（保存の形式は変えない）
+const TYPES = {
+  http: { label: 'Web（http）', port: '' },
+  ssh: { label: 'SSH', port: '22' },
+  db: { label: 'データベース（PostgreSQL）', port: '5432' },
+};
+const typeOf = x => TYPES[x.type] ? x.type : 'http';
+// シェルに貼っても壊れないよう、空白や記号を含むときだけ ' で囲む
+const shq = v => /^[\w.@%+:\/=-]+$/.test(v) ? v : `'${v.replace(/'/g, `'\\''`)}'`;
+// 接続先の表示と、接続のコマンド（パスワードは入れない）
+function target(x) {
+  const t = typeOf(x);
+  if (t === 'http') { try { return { text: new URL(x.url).host }; } catch { return { text: '' }; } }
+  if (!x.host) return { text: '' };
+  const port = x.port && x.port !== TYPES[t].port ? `:${x.port}` : '';
+  if (t === 'ssh') {
+    const cmd = ['ssh', x.user ? shq(`${x.user}@${x.host}`) : shq(x.host), x.port && x.port !== '22' ? `-p ${shq(x.port)}` : ''].filter(Boolean).join(' ');
+    return { text: x.host + port, cmd };
+  }
+  const cmd = ['psql', `-h ${shq(x.host)}`, x.port ? `-p ${shq(x.port)}` : '', x.user ? `-U ${shq(x.user)}` : '', x.db ? `-d ${shq(x.db)}` : ''].filter(Boolean).join(' ');
+  return { text: x.host + port + (x.db ? `/${x.db}` : ''), cmd };
+}
 function iconButton(name, title, onclick) {
   const b = el('button', { class: 'ib', type: 'button', title, 'aria-label': title, onclick });
   setIcon(b, name);
   return b;
 }
 function setIcon(button, name) {
-  button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+  button.innerHTML = svg(name);
 }
 // コピーしたら少しの間チェックマークにする
-function copyButton(text, label, clearLater) {
-  const b = iconButton('copy', `${label}をコピー`, async () => {
+function copyButton(text, label, clearLater, hint) {
+  const b = iconButton('copy', `${label}をコピー` + (hint ? `：${hint}` : ''), async () => {
     if (!(await copy(text, label, clearLater))) return;
     setIcon(b, 'check'); b.classList.add('done');
     setTimeout(() => { setIcon(b, 'copy'); b.classList.remove('done'); }, 1500);
@@ -377,19 +439,30 @@ function copyButton(text, label, clearLater) {
   return b;
 }
 
-// 1件を1行で出す：名前・分類・大切さ・メモ・ユーザー・パスワード・編集（狭い画面では折り返す）
+// 1件を1行で出す：種類・名前・分類・大切さ・メモ・接続先・ユーザー・パスワード・編集（狭い画面では折り返す）
 function renderItem(x) {
-  // 名前のリンクは、マウスを乗せると URL が見える
-  const name = /^https?:\/\//i.test(x.url || '') ? el('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', title: x.url }, x.name) : x.name;
-  const row = el('div', { class: 'head' },
+  const t = typeOf(x);
+  // 名前のリンク（http のとき）は、マウスを乗せると URL が見える
+  const name = t === 'http' && /^https?:\/\//i.test(x.url || '') ? el('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', title: x.url }, x.name) : x.name;
+  const icon = el('span', { class: 'ti', title: TYPES[t].label, 'aria-label': TYPES[t].label });
+  icon.innerHTML = svg(t);
+  const title = el('span', { class: 'title' },
     el('span', { class: 'name' }, name),
     x.category ? el('span', { class: 'chip' }, x.category) : null,
     LEVEL[x.level] ? el('span', { class: 'chip' + (x.level === 'high' ? ' high' : '') }, LEVEL[x.level]) : null,
     // メモは名前の右に1行で出す。長いときは省略して、マウスを乗せると全文が見える
-    x.memo ? el('span', { class: 'memo', title: x.memo }, x.memo.replace(/\s*\n\s*/g, ' / ')) : el('span', { class: 'spacer' }));
+    x.memo ? el('span', { class: 'memo', title: x.memo }, x.memo.replace(/\s*\n\s*/g, ' / ')) : null);
+  const row = el('div', { class: 'head' }, icon, title);
 
-  if (x.user) row.append(el('span', { class: 'part user' },
-    el('span', { class: 'k' }, 'ユーザー'), el('span', { class: 'v' }, x.user), copyButton(x.user, 'ユーザー名', false)));
+  // 接続先（ssh・db はコマンドのコピーも）。行ごとの位置をそろえるため、空でも欄は置く
+  const where = target(x);
+  row.append(el('span', { class: 'part where' },
+    where.text ? el('span', { class: 'k' }, '接続先') : null,
+    where.text ? el('span', { class: 'v', title: where.text }, where.text) : null,
+    where.cmd ? copyButton(where.cmd, `${t === 'ssh' ? 'ssh' : 'psql'} のコマンド`, false, where.cmd) : null));
+  // ユーザー・パスワードがなくても、列をそろえるために空の欄を置く
+  row.append(x.user ? el('span', { class: 'part user' },
+    el('span', { class: 'k' }, 'ユーザー'), el('span', { class: 'v', title: x.user }, x.user), copyButton(x.user, 'ユーザー名', false)) : el('span', { class: 'part user' }));
   if (x.pass) {
     const MASK = '••••••••';
     const v = el('span', { class: 'v' }, MASK);
@@ -402,8 +475,8 @@ function renderItem(x) {
       clearTimeout(timer);
       if (showing) timer = setTimeout(() => { v.textContent = MASK; setIcon(toggle, 'eye'); toggle.title = 'パスワードを表示'; }, 10000);
     });
-    row.append(el('span', { class: 'part' }, el('span', { class: 'k' }, 'パスワード'), v, toggle, copyButton(x.pass, 'パスワード', true)));
-  }
+    row.append(el('span', { class: 'part pass' }, el('span', { class: 'k' }, 'パスワード'), v, toggle, copyButton(x.pass, 'パスワード', true)));
+  } else row.append(el('span', { class: 'part pass' }));
   row.append(iconButton('edit', '編集', () => openEdit(x)));
   return el('div', { class: 'item' }, row);
 }
@@ -435,13 +508,26 @@ async function copy(text, label, clearLater) {
 
 // ---- 追加・編集 ----
 let editing = null;
-const fields = { name: 'f-name', url: 'f-url', user: 'f-user', pass: 'f-pass', category: 'f-cat', level: 'f-level', memo: 'f-memo' };
+const fields = { name: 'f-name', url: 'f-url', host: 'f-host', port: 'f-port', db: 'f-db', user: 'f-user', pass: 'f-pass', category: 'f-cat', level: 'f-level', memo: 'f-memo' };
+// 種類ごとに使う欄（使わない欄は、保存のときに空にする）
+const TYPE_FIELDS = { http: ['url'], ssh: ['host', 'port'], db: ['host', 'port', 'db'] };
+const checkedType = () => (document.querySelector('input[name="f-type"]:checked') || {}).value || 'http';
+// 種類に合わせて、入力欄を出し分ける。ポートが空か、ほかの種類の初期値のままなら、この種類の初期値にする
+function applyType(t) {
+  for (const d of document.querySelectorAll('#edit [data-for]')) d.classList.toggle('hidden', !d.dataset.for.split(' ').includes(t));
+  const port = $('f-port');
+  if (!port.value || Object.values(TYPES).some(v => v.port && v.port === port.value)) port.value = TYPES[t].port;
+}
+for (const r of document.querySelectorAll('input[name="f-type"]')) r.onchange = () => applyType(r.value);
 
 function openEdit(x) {
   editing = x || null;
   $('edit-title').textContent = x ? '編集' : '追加';
   $('edit-delete').classList.toggle('hidden', !x);
   for (const [k, id] of Object.entries(fields)) $(id).value = x ? (x[k] || (k === 'level' ? 'normal' : '')) : (k === 'level' ? 'normal' : '');
+  const t = x ? typeOf(x) : 'http';
+  document.querySelector(`input[name="f-type"][value="${t}"]`).checked = true;
+  applyType(t);
   $('f-pass').type = 'password'; $('f-pass-show').textContent = '表示';
   $('edit').showModal();
 }
@@ -462,6 +548,8 @@ $('edit-form').onsubmit = async e => {
   const data = {};
   for (const [k, id] of Object.entries(fields)) data[k] = $(id).value.trim();
   data.pass = $('f-pass').value;   // パスワードは前後の空白も含めてそのまま
+  data.type = checkedType();
+  for (const k of ['url', 'host', 'port', 'db']) if (!TYPE_FIELDS[data.type].includes(k)) data[k] = '';
   if (!data.name) return;
   if (editing) Object.assign(editing, data, { updated: new Date().toISOString() });
   else session.entries.push({ id: crypto.randomUUID(), ...data, created: new Date().toISOString() });
@@ -546,6 +634,9 @@ setInterval(() => { if (session && Date.now() - lastActivity > IDLE_LOCK_MS) { l
 if (!window.crypto || !crypto.subtle) {
   document.body.innerHTML = '<p class="center">このブラウザでは暗号化の機能が使えません。Chrome か Edge で開いてください。</p>';
 } else {
+  for (const e of document.querySelectorAll('.app-name')) e.textContent = APP_NAME;
+  document.title = APP_NAME;
+  for (const e of document.querySelectorAll('.types .ti')) e.innerHTML = svg(e.dataset.type);
   lock();
 }
 </script>
