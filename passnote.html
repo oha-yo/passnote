@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- passnote：ブラウザで開く、自分用のパスワード帳 https://github.com/oha-yo/passnote -->
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -24,6 +25,9 @@
   button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   button.danger { color: var(--danger); }
   button.icon { padding: 4px 8px; font-size: 13px; white-space: nowrap; }
+  button:disabled { opacity: .5; cursor: default; border-color: var(--line); }
+  button.link { border: none; background: none; padding: 0; font-size: 13px; color: var(--muted); text-decoration: underline; }
+  button.link:hover { color: var(--accent); }
   input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
@@ -92,6 +96,7 @@
   <input id="lock-pw" type="password" autocomplete="current-password">
   <div class="error" id="lock-error"></div>
   <div class="actions"><button class="primary" id="lock-ok">開く</button></div>
+  <p style="margin:16px 0 0; text-align:right"><button type="button" class="link" id="lock-forgot">マスターパスワードを忘れた場合</button></p>
 </section>
 
 <!-- 一覧 -->
@@ -170,6 +175,22 @@
     <div class="actions">
       <button type="button" id="ask-cancel">キャンセル</button>
       <button type="submit" class="primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- マスターパスワードを忘れたときの初期化 -->
+<dialog id="reset">
+  <form method="dialog" id="reset-form">
+    <h2>マスターパスワードを忘れた場合</h2>
+    <p class="note">中身はマスターパスワードで暗号化しているので、パスワードがわからないと<strong>取り出す方法はありません</strong>（作った本人でも、です）。</p>
+    <p class="note">初期化すると、このブラウザに保存しているパスワード帳を消して、新しいマスターパスワードで始め直せます。</p>
+    <p class="note">消す前に、今の中身を<strong>暗号化したまま</strong>ファイルに保存します（ダウンロードのフォルダに <code>pass-note-backup-before-reset-日付.json</code>）。あとでマスターパスワードを思い出したら、「バックアップから復元」で元に戻せます。</p>
+    <label for="reset-confirm">確認のため「初期化する」と入力してください</label>
+    <input id="reset-confirm" autocomplete="off">
+    <div class="actions">
+      <button type="button" id="reset-cancel">キャンセル</button>
+      <button type="submit" class="danger" id="reset-ok" disabled>保存して初期化する</button>
     </div>
   </form>
 </dialog>
@@ -279,6 +300,27 @@ $('lock-ok').onclick = async () => {
 };
 $('lock-pw').onkeydown = e => { if (e.key === 'Enter') $('lock-ok').click(); };
 $('btn-lock').onclick = lock;
+
+// ---- マスターパスワードを忘れたときの初期化 ----
+// 中身は取り出せないので、暗号化したまま保存してから消し、最初の画面に戻す（思い出したら復元できるように）
+const RESET_WORD = '初期化する';
+$('lock-forgot').onclick = () => {
+  $('reset-confirm').value = '';
+  $('reset-ok').disabled = true;
+  $('reset').showModal();
+};
+$('reset-confirm').oninput = () => { $('reset-ok').disabled = $('reset-confirm').value.trim() !== RESET_WORD; };
+$('reset-cancel').onclick = () => $('reset').close();
+$('reset-form').onsubmit = e => {
+  e.preventDefault();
+  if ($('reset-confirm').value.trim() !== RESET_WORD) return;
+  const stored = localStorage.getItem(STORE_KEY);
+  if (stored) download(stored, `pass-note-backup-before-reset-${today()}.json`);
+  localStorage.removeItem(STORE_KEY);
+  $('reset').close();
+  lock();   // 保存したものがないので「はじめる」の画面になる
+  toast('初期化しました。新しいマスターパスワードを決めてください。');
+};
 
 // ---- 一覧 ----
 const LEVEL = { high: '重要', low: '低い', normal: '' };
@@ -458,11 +500,18 @@ $('m-close').onclick = () => $('menu').close();
 
 $('m-export').onclick = async () => {
   const blob = await sealVault(session.key, session.salt, session.entries);
-  const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(blob)], { type: 'application/json' })),
-    download: `pass-note-backup-${new Date().toISOString().slice(0, 10)}.json` });
-  document.body.append(a); a.click(); a.remove();
+  download(JSON.stringify(blob), `pass-note-backup-${today()}.json`);
   toast('バックアップを保存しました');
 };
+
+// ファイル名に付ける日付（この PC の時刻で。toISOString は世界標準時なので、日本の朝 9 時前は前の日になってしまう）
+function today() { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
+
+// 文字をファイルとしてダウンロードさせる
+function download(text, filename) {
+  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: filename });
+  document.body.append(a); a.click(); a.remove();
+}
 
 function startImport() { $('file-input').value = ''; $('file-input').click(); }
 $('m-import').onclick = () => { $('menu').close(); startImport(); };
