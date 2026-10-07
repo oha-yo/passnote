@@ -80,6 +80,15 @@
   .filter button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
   .filter button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--chip); }
   .filter .n { font-size: 12px; }
+  /* 「重要」のスイッチ（OFF：重要を出さない／ON：重要だけ出す） */
+  .imp { display: inline-flex; align-items: center; gap: 6px; margin: 0 8px 0 0; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .imp input { appearance: none; width: 34px; height: 20px; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--chip); position: relative; cursor: pointer; transition: background .15s; flex: none; }
+  .imp input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--panel); box-shadow: 0 0 0 1px var(--line); transition: left .15s; }
+  .imp input:checked { background: var(--danger); border-color: var(--danger); }
+  .imp input:checked::after { left: 16px; box-shadow: none; }
+  .imp:has(input:checked) { color: var(--danger); font-weight: 600; }
   .ti { display: inline-flex; width: 18px; height: 18px; flex: none; }
   .ti svg { width: 100%; height: 100%; }
   .item .ti { color: var(--muted); }
@@ -310,6 +319,7 @@ function lock() {
   $('list').replaceChildren();
   $('search').value = '';
   typeFilter = '';
+  importantOnly = false;
   for (const d of document.querySelectorAll('dialog[open]')) d.close();
   $('lock-pw').value = '';
   $('lock-error').textContent = '';
@@ -392,11 +402,20 @@ function byOrder(a, b) {
   return (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja');
 }
 
-// 種類で絞り込む（'' はすべて）。ロックすると「すべて」に戻す
+// 「重要」のスイッチ。OFF（ふだん）は大切さが「重要」のものを出さない。ON のときは「重要」のものだけを出す。
+// 種類で絞り込む（'' はすべて）。どちらも検索と組み合わせて使える。ロックすると OFF・「すべて」に戻す
+let importantOnly = false;
 let typeFilter = '';
+const isImportant = x => x.level === 'high';
+const inImportance = x => isImportant(x) === importantOnly;
 function renderFilter() {
-  const count = t => session.entries.filter(x => !t || typeOf(x) === t).length;
-  $('type-filter').replaceChildren(...['', ...Object.keys(TYPES)].map(t => {
+  const count = t => session.entries.filter(x => inImportance(x) && (!t || typeOf(x) === t)).length;
+  const sw = el('input', { type: 'checkbox', role: 'switch', 'aria-label': '重要だけを表示' });
+  sw.checked = importantOnly;
+  sw.onchange = () => { importantOnly = sw.checked; render(); };
+  const imp = el('label', { class: 'imp', title: 'OFF：重要のものを隠す／ON：重要のものだけを表示' }, sw, '重要',
+    el('span', { class: 'n' }, `${session.entries.filter(isImportant).length}`));
+  $('type-filter').replaceChildren(imp, ...['', ...Object.keys(TYPES)].map(t => {
     const b = el('button', { type: 'button', 'aria-pressed': String(t === typeFilter), onclick: () => { typeFilter = t; render(); } });
     if (t) { const i = el('span', { class: 'ti' }); i.innerHTML = svg(t); b.append(i); }
     b.append(t ? TYPES[t].label : 'すべて', el('span', { class: 'n' }, `${count(t)}`));
@@ -409,6 +428,7 @@ function render() {
   renderFilter();
   const q = $('search').value.trim().toLowerCase();
   const items = session.entries
+    .filter(inImportance)
     .filter(x => !typeFilter || typeOf(x) === typeFilter)
     .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)))
     .sort(byOrder);
@@ -416,9 +436,10 @@ function render() {
   $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
 
   if (items.length === 0) {
-    $('list').replaceChildren(el('div', { class: 'empty' }, session.entries.length
-      ? (typeFilter && !$('search').value.trim() ? `${TYPES[typeFilter].label} の登録はまだありません。` : '見つかりません。')
-      : 'まだ何もありません。「＋ 追加」から登録してください。'));
+    const searching = !!$('search').value.trim();
+    $('list').replaceChildren(el('div', { class: 'empty' }, !session.entries.length ? 'まだ何もありません。「＋ 追加」から登録してください。'
+      : searching ? '見つかりません。' + (importantOnly ? '' : '（重要のものは「重要」を ON にすると探せます）')
+      : `${importantOnly ? '重要の' : ''}${typeFilter ? `${TYPES[typeFilter].label} の` : ''}登録はまだありません。`));
     return;
   }
   $('list').replaceChildren(...items.map(renderItem));
@@ -619,6 +640,7 @@ function openEdit(x) {
   $('edit-delete').classList.toggle('hidden', !x);
   for (const [k, id] of Object.entries(fields)) $(id).value = x ? (x[k] || (k === 'level' ? 'normal' : '')) : (k === 'level' ? 'normal' : '');
   const t = x ? typeOf(x) : (typeFilter || 'http');   // 絞り込んでいるときは、その種類で追加を始める
+  if (!x && importantOnly) $('f-level').value = 'high';  // 重要だけを出しているときは「重要」で始める
   document.querySelector(`input[name="f-type"][value="${t}"]`).checked = true;
   applyType(t);
   $('f-pass').type = 'password'; $('f-pass-show').textContent = '表示';
@@ -650,7 +672,10 @@ $('edit-form').onsubmit = async e => {
     session.entries.push({ id: crypto.randomUUID(), ...data, created: new Date().toISOString(), ...(orders.length ? { order: Math.max(...orders) + 1 } : {}) });
   }
   await persist();
-  $('edit').close(); render(); toast('保存しました');
+  $('edit').close(); render();
+  toast(inImportance(data) ? '保存しました'
+    : importantOnly ? '保存しました（重要ではないので、「重要」を OFF にすると表示されます）'
+    : '保存しました（重要なので、「重要」を ON にすると表示されます）');
 };
 $('edit-delete').onclick = async () => {
   if (!editing || !confirm(`「${editing.name}」を削除しますか？`)) return;
