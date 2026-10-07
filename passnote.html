@@ -49,8 +49,6 @@
   .item .name a { color: var(--accent); text-decoration: none; }
   .chip { background: var(--chip); border-radius: 999px; padding: 0 10px; font-size: 12px; color: var(--muted); }
   .chip.high { color: var(--danger); }
-  .item .spacer { flex: 1; }
-  /* ユーザー・パスワードは、1行の右寄りにまとめて置く（間を少し空ける） */
   .item .part { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .item .k { font-size: 12px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
   .item .v { font-family: Consolas, "BIZ UDGothic", monospace; overflow-wrap: anywhere; }
@@ -213,7 +211,7 @@
     <button id="m-import">バックアップから復元（今の中身と置き換え）</button>
     <button id="m-change">マスターパスワードを変更</button>
   </div>
-  <div class="actions"><button id="m-close">閉じる</button></div>
+  <div class="actions"><span class="note" id="version" style="margin-right:auto"></span><button id="m-close">閉じる</button></div>
 </dialog>
 
 <!-- パスワードを聞く（復元・変更用） -->
@@ -258,23 +256,71 @@
 'use strict';
 // 中身は AES-GCM（256bit）で暗号化し、鍵はマスターパスワードから PBKDF2-SHA256（60 万回）で作る。
 // 暗号化したものだけを localStorage に保存する。平文は画面を開いている間のメモリにしか置かない。
+// https://github.com/oha-yo/passnote
 const APP_NAME = '接続情報';             // 画面に出す名前（仮称）。変えるときはここだけ直す
+const VERSION = '1.0.0';                 // 変えたら CHANGELOG.md もそろえる
 const STORE_KEY = 'pass-note-vault-v1';   // 保存のキーは、すでにデータが入っているので変えない
 const ITERATIONS = 600000;
 const CLIPBOARD_CLEAR_MS = 30000;
 const IDLE_LOCK_MS = 5 * 60 * 1000;
+const RESET_WORD = '初期化する';          // 初期化の確認に入れてもらう言葉
 
+// ---- 小さな道具 ----
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-let session = null;      // { key, salt, entries }
-let lastActivity = Date.now();
-let clipboardTimer = null;
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'onclick') e.onclick = v; else if (k === 'class') e.className = v; else e.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) e.append(c);
+  return e;
+}
+
+// アイコン（線画の SVG）。中身は固定の文字列なので innerHTML に入れてよい
+const ICONS = {
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
+  // 種類のアイコン
+  http: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  ssh: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
+  db: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+};
+const svg = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+function setIcon(node, name) { node.innerHTML = svg(name); }
+function iconSpan(name, attrs = {}) { const s = el('span', attrs); setIcon(s, name); return s; }
+function iconButton(name, title, onclick) {
+  const b = el('button', { class: 'ib', type: 'button', title, 'aria-label': title, onclick });
+  setIcon(b, name);
+  return b;
+}
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ファイル名に付ける日付（この PC の時刻で。toISOString は世界標準時なので、日本の朝 9 時前は前の日になってしまう）
+function today() { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
+// 文字をファイルとしてダウンロードさせる
+function download(text, filename) {
+  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: filename });
+  document.body.append(a); a.click(); a.remove();
+}
 
 // ---- 暗号化 ----
 function toB64(bytes) { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); }
 function fromB64(str) { return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+const newSalt = () => crypto.getRandomValues(new Uint8Array(16));
 
 async function deriveKey(password, salt) {
   const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -282,6 +328,7 @@ async function deriveKey(password, salt) {
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
+// 保存の形式：{ app, v, iter, salt, iv, ct }（すでにユーザーのデータが入っているので変えない）
 async function sealVault(key, salt, entries) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ entries })));
@@ -299,175 +346,33 @@ async function openVault(blob, password) {
   return { key, salt, entries: JSON.parse(dec.decode(plain)).entries || [] };
 }
 
-function readStored() { try { const s = localStorage.getItem(STORE_KEY); return s ? JSON.parse(s) : null; } catch { return null; } }
+// ---- 保存（localStorage の読み書きは、ここだけで行う） ----
+const store = {
+  raw() { try { return localStorage.getItem(STORE_KEY); } catch { return null; } },
+  read() { try { const s = this.raw(); return s ? JSON.parse(s) : null; } catch { return null; } },
+  write(blob) { localStorage.setItem(STORE_KEY, JSON.stringify(blob)); },
+  clear() { localStorage.removeItem(STORE_KEY); },
+};
 
+let session = null;      // 開いている間だけ持つ { key, salt, entries }
 async function persist() {
   const blob = await sealVault(session.key, session.salt, session.entries);
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(blob)); }
+  try { store.write(blob); }
   catch { toast('保存できませんでした。バックアップを保存してください。'); }
 }
 
-// ---- 画面の切り替え ----
-function show(which) {
-  for (const id of ['setup', 'lock', 'app']) $(id).classList.toggle('hidden', id !== which);
-  const focus = { setup: 'setup-pw1', lock: 'lock-pw', app: 'search' }[which];
-  setTimeout(() => $(focus).focus(), 0);
-}
-
-function lock() {
-  session = null;
-  $('list').replaceChildren();
-  $('search').value = '';
-  typeFilter = '';
-  importantOnly = false;
-  for (const d of document.querySelectorAll('dialog[open]')) d.close();
-  $('lock-pw').value = '';
-  $('lock-error').textContent = '';
-  show(readStored() ? 'lock' : 'setup');
-}
-
-function toast(msg) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ---- 初回・ロック解除 ----
-$('setup-ok').onclick = async () => {
-  const p1 = $('setup-pw1').value, p2 = $('setup-pw2').value;
-  if (p1.length < 8) return $('setup-error').textContent = '8 文字以上にしてください。';
-  if (p1 !== p2) return $('setup-error').textContent = '2 つの入力が一致しません。';
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  session = { key: await deriveKey(p1, salt), salt, entries: [] };
-  $('setup-pw1').value = $('setup-pw2').value = '';
-  await persist();
-  show('app'); render();
-};
-$('setup-pw2').onkeydown = e => { if (e.key === 'Enter') $('setup-ok').click(); };
-$('setup-restore').onclick = () => startImport();
-
-$('lock-ok').onclick = async () => {
-  $('lock-error').textContent = '確認しています…';
-  try {
-    session = await openVault(readStored(), $('lock-pw').value);
-    $('lock-pw').value = '';
-    $('lock-error').textContent = '';
-    show('app'); render();
-  } catch (e) { $('lock-error').textContent = e.message; }
-};
-$('lock-pw').onkeydown = e => { if (e.key === 'Enter') $('lock-ok').click(); };
-$('btn-lock').onclick = lock;
-
-// ---- マスターパスワードを忘れたときの初期化 ----
-// 中身は取り出せないので、暗号化したまま保存してから消し、最初の画面に戻す（思い出したら復元できるように）
-const RESET_WORD = '初期化する';
-$('lock-forgot').onclick = () => {
-  $('reset-confirm').value = '';
-  $('reset-ok').disabled = true;
-  $('reset').showModal();
-};
-$('reset-confirm').oninput = () => { $('reset-ok').disabled = $('reset-confirm').value.trim() !== RESET_WORD; };
-$('reset-cancel').onclick = () => $('reset').close();
-$('reset-form').onsubmit = e => {
-  e.preventDefault();
-  if ($('reset-confirm').value.trim() !== RESET_WORD) return;
-  const stored = localStorage.getItem(STORE_KEY);
-  if (stored) download(stored, `pass-note-backup-before-reset-${today()}.json`);
-  localStorage.removeItem(STORE_KEY);
-  $('reset').close();
-  lock();   // 保存したものがないので「はじめる」の画面になる
-  toast('初期化しました。新しいマスターパスワードを決めてください。');
-};
-
-// ---- 一覧 ----
-const LEVEL = { high: '重要', low: '低い', normal: '' };
-
-function el(tag, attrs = {}, ...children) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'onclick') e.onclick = v; else if (k === 'class') e.className = v; else e.setAttribute(k, v);
-  }
-  for (const c of children) if (c != null) e.append(c);
-  return e;
-}
-
-// 並び順。ドラッグで並べ替えると、1件ごとに order（0, 1, 2 …）を持つ。order がないもの（並べ替える前のデータ）は、
-// order があるものの後ろに、分類 → 名前の順で並べる
-function byOrder(a, b) {
-  const oa = Number.isFinite(a.order), ob = Number.isFinite(b.order);
-  if (oa && ob) return a.order - b.order;
-  if (oa !== ob) return oa ? -1 : 1;
-  return (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja');
-}
-
-// 「重要」のスイッチ。OFF（ふだん）は大切さが「重要」のものを出さない。ON のときは「重要」のものだけを出す。
-// 種類で絞り込む（'' はすべて）。どちらも検索と組み合わせて使える。ロックすると OFF・「すべて」に戻す
-let importantOnly = false;
-let typeFilter = '';
-const isImportant = x => x.level === 'high';
-const inImportance = x => isImportant(x) === importantOnly;
-function renderFilter() {
-  const count = t => session.entries.filter(x => inImportance(x) && (!t || typeOf(x) === t)).length;
-  const sw = el('input', { type: 'checkbox', role: 'switch', 'aria-label': '重要だけを表示' });
-  sw.checked = importantOnly;
-  sw.onchange = () => { importantOnly = sw.checked; render(); };
-  const imp = el('label', { class: 'imp', title: 'OFF：重要のものを隠す／ON：重要のものだけを表示' }, sw, '重要',
-    el('span', { class: 'n' }, `${session.entries.filter(isImportant).length}`));
-  $('type-filter').replaceChildren(imp, ...['', ...Object.keys(TYPES)].map(t => {
-    const b = el('button', { type: 'button', 'aria-pressed': String(t === typeFilter), onclick: () => { typeFilter = t; render(); } });
-    if (t) { const i = el('span', { class: 'ti' }); i.innerHTML = svg(t); b.append(i); }
-    b.append(t ? TYPES[t].label : 'すべて', el('span', { class: 'n' }, `${count(t)}`));
-    return b;
-  }));
-}
-
-function render() {
-  if (!session) return;
-  renderFilter();
-  const q = $('search').value.trim().toLowerCase();
-  const items = session.entries
-    .filter(inImportance)
-    .filter(x => !typeFilter || typeOf(x) === typeFilter)
-    .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)))
-    .sort(byOrder);
-
-  $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
-
-  if (items.length === 0) {
-    const searching = !!$('search').value.trim();
-    $('list').replaceChildren(el('div', { class: 'empty' }, !session.entries.length ? 'まだ何もありません。「＋ 追加」から登録してください。'
-      : searching ? '見つかりません。' + (importantOnly ? '' : '（重要のものは「重要」を ON にすると探せます）')
-      : `${importantOnly ? '重要の' : ''}${typeFilter ? `${TYPES[typeFilter].label} の` : ''}登録はまだありません。`));
-    return;
-  }
-  $('list').replaceChildren(...items.map(renderItem));
-}
-
-// アイコン（線画の SVG）
-const ICONS = {
-  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
-  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
-  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
-  grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
-  // 種類のアイコン
-  http: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
-  ssh: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
-  db: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
-};
-const svg = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
-
 // ---- 接続の種類 ----
-// 以前のデータには type がないので、http として扱う（保存の形式は変えない）
+// 種類ごとの名前・ポートの初期値・使う入力欄。以前のデータには type がないので、http として扱う（保存の形式は変えない）
 const TYPES = {
-  http: { label: 'Web（http）', port: '' },
-  ssh: { label: 'SSH', port: '22' },
-  db: { label: 'データベース（PostgreSQL）', port: '5432' },
+  http: { label: 'Web（http）', port: '', fields: ['url'] },
+  ssh: { label: 'SSH', port: '22', fields: ['host', 'port'] },
+  db: { label: 'データベース（PostgreSQL）', port: '5432', fields: ['host', 'port', 'db'] },
 };
+const TYPE_FIELDS = [...new Set(Object.values(TYPES).flatMap(t => t.fields))];   // 種類によって使う・使わないが変わる欄
 const typeOf = x => TYPES[x.type] ? x.type : 'http';
+const LEVEL = { high: '重要', low: '低い', normal: '' };
+const isImportant = x => x.level === 'high';
+
 // シェルに貼っても壊れないよう、空白や記号を含むときだけ ' で囲む
 const shq = v => /^[\w.@%+:\/=-]+$/.test(v) ? v : `'${v.replace(/'/g, `'\\''`)}'`;
 // 接続先の表示と、接続のコマンド（パスワードは入れない）
@@ -483,65 +388,179 @@ function target(x) {
   const cmd = ['psql', `-h ${shq(x.host)}`, x.port ? `-p ${shq(x.port)}` : '', x.user ? `-U ${shq(x.user)}` : '', x.db ? `-d ${shq(x.db)}` : ''].filter(Boolean).join(' ');
   return { text: x.host + port + (x.db ? `/${x.db}` : ''), cmd };
 }
-function iconButton(name, title, onclick) {
-  const b = el('button', { class: 'ib', type: 'button', title, 'aria-label': title, onclick });
-  setIcon(b, name);
-  return b;
-}
-function setIcon(button, name) {
-  button.innerHTML = svg(name);
-}
-// コピーしたら少しの間チェックマークにする
-function copyButton(text, label, clearLater, hint) {
-  const b = iconButton('copy', `${label}をコピー` + (hint ? `：${hint}` : ''), async () => {
-    if (!(await copy(text, label, clearLater))) return;
-    setIcon(b, 'check'); b.classList.add('done');
-    setTimeout(() => { setIcon(b, 'copy'); b.classList.remove('done'); }, 1500);
-  });
-  return b;
+
+// ---- 一覧の表示の状態 ----
+// 「重要」のスイッチ：OFF（ふだん）は大切さが「重要」のものを出さない。ON のときは「重要」のものだけを出す。
+// 種類：'' はすべて。どちらも検索と組み合わせて使える。ロックすると、検索も含めて最初の状態に戻す
+const view = {
+  importantOnly: false,
+  type: '',
+  reset() { this.importantOnly = false; this.type = ''; $('search').value = ''; },
+  query: () => $('search').value.trim().toLowerCase(),
+  inImportance(x) { return isImportant(x) === this.importantOnly; },
+  inType(x) { return !this.type || typeOf(x) === this.type; },
+  matches(x, q) { return !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)); },
+};
+
+// ---- 画面の切り替え・ロック ----
+function show(which) {
+  for (const id of ['setup', 'lock', 'app']) $(id).classList.toggle('hidden', id !== which);
+  const focus = { setup: 'setup-pw1', lock: 'lock-pw', app: 'search' }[which];
+  setTimeout(() => $(focus).focus(), 0);
 }
 
-// 1件を1行で出す：種類・名前・分類・大切さ・メモ・接続先・ユーザー・パスワード・編集（狭い画面では折り返す）
-function renderItem(x) {
-  const t = typeOf(x);
+function lock() {
+  session = null;
+  $('list').replaceChildren();
+  view.reset();
+  for (const d of document.querySelectorAll('dialog[open]')) d.close();
+  $('lock-pw').value = '';
+  $('lock-error').textContent = '';
+  show(store.read() ? 'lock' : 'setup');
+}
+
+// ---- 初回・ロック解除 ----
+$('setup-ok').onclick = async () => {
+  const p1 = $('setup-pw1').value, p2 = $('setup-pw2').value;
+  if (p1.length < 8) return $('setup-error').textContent = '8 文字以上にしてください。';
+  if (p1 !== p2) return $('setup-error').textContent = '2 つの入力が一致しません。';
+  const salt = newSalt();
+  session = { key: await deriveKey(p1, salt), salt, entries: [] };
+  $('setup-pw1').value = $('setup-pw2').value = '';
+  await persist();
+  show('app'); render();
+};
+$('setup-pw2').onkeydown = e => { if (e.key === 'Enter') $('setup-ok').click(); };
+$('setup-restore').onclick = () => startImport();
+
+$('lock-ok').onclick = async () => {
+  $('lock-error').textContent = '確認しています…';
+  try {
+    session = await openVault(store.read(), $('lock-pw').value);
+    $('lock-pw').value = '';
+    $('lock-error').textContent = '';
+    show('app'); render();
+  } catch (e) { $('lock-error').textContent = e.message; }
+};
+$('lock-pw').onkeydown = e => { if (e.key === 'Enter') $('lock-ok').click(); };
+$('btn-lock').onclick = lock;
+
+// ---- マスターパスワードを忘れたときの初期化 ----
+// 中身は取り出せないので、暗号化したまま保存してから消し、最初の画面に戻す（思い出したら復元できるように）
+$('lock-forgot').onclick = () => {
+  $('reset-confirm').value = '';
+  $('reset-ok').disabled = true;
+  $('reset').showModal();
+};
+$('reset-confirm').oninput = () => { $('reset-ok').disabled = $('reset-confirm').value.trim() !== RESET_WORD; };
+$('reset-cancel').onclick = () => $('reset').close();
+$('reset-form').onsubmit = e => {
+  e.preventDefault();
+  if ($('reset-confirm').value.trim() !== RESET_WORD) return;
+  const raw = store.raw();
+  if (raw) download(raw, `pass-note-backup-before-reset-${today()}.json`);
+  store.clear();
+  $('reset').close();
+  lock();   // 保存したものがないので「はじめる」の画面になる
+  toast('初期化しました。新しいマスターパスワードを決めてください。');
+};
+
+// ---- 一覧 ----
+// 並び順。ドラッグで並べ替えると、1件ごとに order（0, 1, 2 …）を持つ。order がないもの（並べ替える前のデータ）は、
+// order があるものの後ろに、分類 → 名前の順で並べる
+function byOrder(a, b) {
+  const oa = Number.isFinite(a.order), ob = Number.isFinite(b.order);
+  if (oa && ob) return a.order - b.order;
+  if (oa !== ob) return oa ? -1 : 1;
+  return (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja');
+}
+
+// 「重要」のスイッチと、種類のボタン（件数つき。件数は今の「重要」の状態での数）
+function renderFilter() {
+  const count = t => session.entries.filter(x => view.inImportance(x) && (!t || typeOf(x) === t)).length;
+  const sw = el('input', { type: 'checkbox', role: 'switch', 'aria-label': '重要だけを表示' });
+  sw.checked = view.importantOnly;
+  sw.onchange = () => { view.importantOnly = sw.checked; render(); };
+  const imp = el('label', { class: 'imp', title: 'OFF：重要のものを隠す／ON：重要のものだけを表示' }, sw, '重要',
+    el('span', { class: 'n' }, `${session.entries.filter(isImportant).length}`));
+  $('type-filter').replaceChildren(imp, ...['', ...Object.keys(TYPES)].map(t => {
+    const b = el('button', { type: 'button', 'aria-pressed': String(t === view.type), onclick: () => { view.type = t; render(); } });
+    if (t) b.append(iconSpan(t, { class: 'ti' }));
+    b.append(t ? TYPES[t].label : 'すべて', el('span', { class: 'n' }, `${count(t)}`));
+    return b;
+  }));
+}
+
+// 一覧に出すものがないときの文言
+function emptyMessage() {
+  if (!session.entries.length) return 'まだ何もありません。「＋ 追加」から登録してください。';
+  if (view.query()) return '見つかりません。' + (view.importantOnly ? '' : '（重要のものは「重要」を ON にすると探せます）');
+  return `${view.importantOnly ? '重要の' : ''}${view.type ? `${TYPES[view.type].label} の` : ''}登録はまだありません。`;
+}
+
+function render() {
+  if (!session) return;
+  renderFilter();
+  const q = view.query();
+  const items = session.entries.filter(x => view.inImportance(x) && view.inType(x) && view.matches(x, q)).sort(byOrder);
+  $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
+  $('list').replaceChildren(...(items.length ? items.map(renderItem) : [el('div', { class: 'empty' }, emptyMessage())]));
+}
+$('search').oninput = render;
+
+// 1件を1行で出す：つまみ・種類・名前など・接続先・ユーザー・パスワード・編集（狭い画面では折り返す）。
+// 接続先・ユーザー・パスワードがなくても、列をそろえるために空の欄を置く
+const cell = (name, ...children) => el('span', { class: `part ${name}` }, ...children);
+const label = text => el('span', { class: 'k' }, text);
+
+function titleCell(x, t) {
   // 名前のリンク（http のとき）は、マウスを乗せると URL が見える
   const name = t === 'http' && /^https?:\/\//i.test(x.url || '') ? el('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', title: x.url }, x.name) : x.name;
-  const icon = el('span', { class: 'ti', title: TYPES[t].label, 'aria-label': TYPES[t].label });
-  icon.innerHTML = svg(t);
-  const title = el('span', { class: 'title' },
+  return el('span', { class: 'title' },
     el('span', { class: 'name' }, name),
     x.category ? el('span', { class: 'chip' }, x.category) : null,
-    LEVEL[x.level] ? el('span', { class: 'chip' + (x.level === 'high' ? ' high' : '') }, LEVEL[x.level]) : null,
+    LEVEL[x.level] ? el('span', { class: 'chip' + (isImportant(x) ? ' high' : '') }, LEVEL[x.level]) : null,
     // メモは名前の右に1行で出す。長いときは省略して、マウスを乗せると全文が見える
     x.memo ? el('span', { class: 'memo', title: x.memo }, x.memo.replace(/\s*\n\s*/g, ' / ')) : null);
-  const grip = el('span', { class: 'grip', title: 'ドラッグで並べ替え', 'aria-hidden': 'true' });
-  grip.innerHTML = svg('grip');
-  const row = el('div', { class: 'head' }, grip, icon, title);
+}
+function whereCell(x, t) {
+  const w = target(x);
+  if (!w.text) return cell('where');
+  return cell('where', label('接続先'), el('span', { class: 'v', title: w.text }, w.text),
+    w.cmd ? copyButton(w.cmd, `${t === 'ssh' ? 'ssh' : 'psql'} のコマンド`, false, w.cmd) : null);
+}
+function userCell(x) {
+  if (!x.user) return cell('user');
+  return cell('user', label('ユーザー'), el('span', { class: 'v', title: x.user }, x.user), copyButton(x.user, 'ユーザー名', false));
+}
+// パスワードは伏せて出す。👁 で表示し、10 秒で自動的に隠す
+function passCell(x) {
+  if (!x.pass) return cell('pass');
+  const MASK = '••••••••';
+  const v = el('span', { class: 'v' }, MASK);
+  let timer = null;
+  const setShown = on => {
+    v.textContent = on ? x.pass : MASK;
+    setIcon(toggle, on ? 'eyeOff' : 'eye');
+    toggle.title = on ? 'パスワードを隠す' : 'パスワードを表示';
+  };
+  const toggle = iconButton('eye', 'パスワードを表示', () => {
+    const on = v.textContent === MASK;
+    setShown(on);
+    clearTimeout(timer);
+    if (on) timer = setTimeout(() => setShown(false), 10000);
+  });
+  return cell('pass', label('パスワード'), v, toggle, copyButton(x.pass, 'パスワード', true));
+}
 
-  // 接続先（ssh・db はコマンドのコピーも）。行ごとの位置をそろえるため、空でも欄は置く
-  const where = target(x);
-  row.append(el('span', { class: 'part where' },
-    where.text ? el('span', { class: 'k' }, '接続先') : null,
-    where.text ? el('span', { class: 'v', title: where.text }, where.text) : null,
-    where.cmd ? copyButton(where.cmd, `${t === 'ssh' ? 'ssh' : 'psql'} のコマンド`, false, where.cmd) : null));
-  // ユーザー・パスワードがなくても、列をそろえるために空の欄を置く
-  row.append(x.user ? el('span', { class: 'part user' },
-    el('span', { class: 'k' }, 'ユーザー'), el('span', { class: 'v', title: x.user }, x.user), copyButton(x.user, 'ユーザー名', false)) : el('span', { class: 'part user' }));
-  if (x.pass) {
-    const MASK = '••••••••';
-    const v = el('span', { class: 'v' }, MASK);
-    let timer = null;
-    const toggle = iconButton('eye', 'パスワードを表示', () => {
-      const showing = v.textContent === MASK;
-      v.textContent = showing ? x.pass : MASK;
-      setIcon(toggle, showing ? 'eyeOff' : 'eye');
-      toggle.title = showing ? 'パスワードを隠す' : 'パスワードを表示';
-      clearTimeout(timer);
-      if (showing) timer = setTimeout(() => { v.textContent = MASK; setIcon(toggle, 'eye'); toggle.title = 'パスワードを表示'; }, 10000);
-    });
-    row.append(el('span', { class: 'part pass' }, el('span', { class: 'k' }, 'パスワード'), v, toggle, copyButton(x.pass, 'パスワード', true)));
-  } else row.append(el('span', { class: 'part pass' }));
-  row.append(iconButton('edit', '編集', () => openEdit(x)));
+function renderItem(x) {
+  const t = typeOf(x);
+  const grip = iconSpan('grip', { class: 'grip', title: 'ドラッグで並べ替え', 'aria-hidden': 'true' });
+  const row = el('div', { class: 'head' },
+    grip,
+    iconSpan(t, { class: 'ti', title: TYPES[t].label, 'aria-label': TYPES[t].label }),
+    titleCell(x, t), whereCell(x, t), userCell(x), passCell(x),
+    iconButton('edit', '編集', () => openEdit(x)));
   const card = el('div', { class: 'item' }, row);
   card.dataset.id = x.id;
   grip.onpointerdown = e => startDrag(e, card);
@@ -584,21 +603,19 @@ function startDrag(e, card) {
   addEventListener('pointerup', end);
   addEventListener('pointercancel', end);
 }
-async function moveEntry(moving, targetId, after) {
-  // 全体を今の並び順にして、動かすものを抜き、落とした行の前か後ろに入れ直す。そのあと順番を振り直して保存する
+// 全体を今の並び順にして、動かすものを抜き、落とした行の前か後ろに入れ直す。そのあと順番を振り直して保存する
+async function moveEntry(movingId, targetId, after) {
   const all = [...session.entries].sort(byOrder);
-  const item = all.splice(all.findIndex(x => x.id === moving), 1)[0];
-  const at = all.findIndex(x => x.id === targetId) + (after ? 1 : 0);
-  all.splice(at, 0, item);
+  const item = all.splice(all.findIndex(x => x.id === movingId), 1)[0];
+  all.splice(all.findIndex(x => x.id === targetId) + (after ? 1 : 0), 0, item);
   all.forEach((x, i) => { x.order = i; });
   await persist();
   render();
 }
 
-$('search').oninput = render;
-
 // ---- クリップボード ----
-async function copy(text, label, clearLater) {
+let clipboardTimer = null;
+async function copy(text, what, clearLater) {
   let ok = false;
   try { await navigator.clipboard.writeText(text); ok = true; }
   catch {
@@ -610,21 +627,28 @@ async function copy(text, label, clearLater) {
   if (!ok) { toast('コピーできませんでした。'); return false; }
   clearTimeout(clipboardTimer);
   if (clearLater) {
-    toast(`${label}をコピーしました（30 秒後に消します）`);
+    toast(`${what}をコピーしました（30 秒後に消します）`);
     clipboardTimer = setTimeout(async () => {
       try { await navigator.clipboard.writeText(''); } catch { /* 画面を開いていないときは消せない */ }
     }, CLIPBOARD_CLEAR_MS);
   } else {
-    toast(`${label}をコピーしました`);
+    toast(`${what}をコピーしました`);
   }
   return true;
+}
+// コピーのボタン。コピーできたら少しの間チェックマークにする（hint はマウスを乗せたときに見せる中身）
+function copyButton(text, what, clearLater, hint) {
+  const b = iconButton('copy', `${what}をコピー` + (hint ? `：${hint}` : ''), async () => {
+    if (!(await copy(text, what, clearLater))) return;
+    setIcon(b, 'check'); b.classList.add('done');
+    setTimeout(() => { setIcon(b, 'copy'); b.classList.remove('done'); }, 1500);
+  });
+  return b;
 }
 
 // ---- 追加・編集 ----
 let editing = null;
 const fields = { name: 'f-name', url: 'f-url', host: 'f-host', port: 'f-port', db: 'f-db', user: 'f-user', pass: 'f-pass', category: 'f-cat', level: 'f-level', memo: 'f-memo' };
-// 種類ごとに使う欄（使わない欄は、保存のときに空にする）
-const TYPE_FIELDS = { http: ['url'], ssh: ['host', 'port'], db: ['host', 'port', 'db'] };
 const checkedType = () => (document.querySelector('input[name="f-type"]:checked') || {}).value || 'http';
 // 種類に合わせて、入力欄を出し分ける。ポートが空か、ほかの種類の初期値のままなら、この種類の初期値にする
 function applyType(t) {
@@ -634,29 +658,29 @@ function applyType(t) {
 }
 for (const r of document.querySelectorAll('input[name="f-type"]')) r.onchange = () => applyType(r.value);
 
+function setPassShown(on) { $('f-pass').type = on ? 'text' : 'password'; $('f-pass-show').textContent = on ? '隠す' : '表示'; }
+
 function openEdit(x) {
   editing = x || null;
   $('edit-title').textContent = x ? '編集' : '追加';
   $('edit-delete').classList.toggle('hidden', !x);
-  for (const [k, id] of Object.entries(fields)) $(id).value = x ? (x[k] || (k === 'level' ? 'normal' : '')) : (k === 'level' ? 'normal' : '');
-  const t = x ? typeOf(x) : (typeFilter || 'http');   // 絞り込んでいるときは、その種類で追加を始める
-  if (!x && importantOnly) $('f-level').value = 'high';  // 重要だけを出しているときは「重要」で始める
+  for (const [k, id] of Object.entries(fields)) $(id).value = (x && x[k]) || (k === 'level' ? 'normal' : '');
+  // 追加のときは、今の表示に合わせて始める（種類で絞り込んでいればその種類、「重要」が ON なら重要）
+  const t = x ? typeOf(x) : (view.type || 'http');
+  if (!x && view.importantOnly) $('f-level').value = 'high';
   document.querySelector(`input[name="f-type"][value="${t}"]`).checked = true;
   applyType(t);
-  $('f-pass').type = 'password'; $('f-pass-show').textContent = '表示';
+  setPassShown(false);
   $('edit').showModal();
 }
 $('btn-add').onclick = () => openEdit(null);
 $('edit-cancel').onclick = () => $('edit').close();
-$('f-pass-show').onclick = () => {
-  const p = $('f-pass'); p.type = p.type === 'password' ? 'text' : 'password';
-  $('f-pass-show').textContent = p.type === 'password' ? '表示' : '隠す';
-};
+$('f-pass-show').onclick = () => setPassShown($('f-pass').type === 'password');
 $('f-pass-gen').onclick = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#$%&*+-=?@_';
   const r = crypto.getRandomValues(new Uint32Array(20));
   $('f-pass').value = Array.from(r, n => chars[n % chars.length]).join('');
-  $('f-pass').type = 'text'; $('f-pass-show').textContent = '隠す';
+  setPassShown(true);
 };
 $('edit-form').onsubmit = async e => {
   e.preventDefault();
@@ -664,17 +688,19 @@ $('edit-form').onsubmit = async e => {
   for (const [k, id] of Object.entries(fields)) data[k] = $(id).value.trim();
   data.pass = $('f-pass').value;   // パスワードは前後の空白も含めてそのまま
   data.type = checkedType();
-  for (const k of ['url', 'host', 'port', 'db']) if (!TYPE_FIELDS[data.type].includes(k)) data[k] = '';
+  for (const k of TYPE_FIELDS) if (!TYPES[data.type].fields.includes(k)) data[k] = '';   // この種類で使わない欄は空にする
   if (!data.name) return;
   if (editing) Object.assign(editing, data, { updated: new Date().toISOString() });
   else {
+    // 並べ替えたことがあるときは、一番下に入るよう順番を付ける
     const orders = session.entries.map(x => x.order).filter(Number.isFinite);
     session.entries.push({ id: crypto.randomUUID(), ...data, created: new Date().toISOString(), ...(orders.length ? { order: Math.max(...orders) + 1 } : {}) });
   }
   await persist();
   $('edit').close(); render();
-  toast(inImportance(data) ? '保存しました'
-    : importantOnly ? '保存しました（重要ではないので、「重要」を OFF にすると表示されます）'
+  // 保存したものが今の表示から外れるときは、どうすれば見えるかを知らせる
+  toast(view.inImportance(data) ? '保存しました'
+    : view.importantOnly ? '保存しました（重要ではないので、「重要」を OFF にすると表示されます）'
     : '保存しました（重要なので、「重要」を ON にすると表示されます）');
 };
 $('edit-delete').onclick = async () => {
@@ -684,7 +710,7 @@ $('edit-delete').onclick = async () => {
   $('edit').close(); render(); toast('削除しました');
 };
 
-// ---- パスワードを聞くダイアログ ----
+// ---- パスワードを聞くダイアログ（復元・変更用） ----
 function askPassword({ title, note, label = 'パスワード', twice = false }) {
   return new Promise(resolve => {
     $('ask-title').textContent = title; $('ask-note').textContent = note || '';
@@ -703,7 +729,7 @@ function askPassword({ title, note, label = 'パスワード', twice = false }) 
   });
 }
 
-// ---- バックアップ・復元・変更 ----
+// ---- バックアップ・復元・マスターパスワードの変更 ----
 $('btn-menu').onclick = () => $('menu').showModal();
 $('m-close').onclick = () => $('menu').close();
 
@@ -712,15 +738,6 @@ $('m-export').onclick = async () => {
   download(JSON.stringify(blob), `pass-note-backup-${today()}.json`);
   toast('バックアップを保存しました');
 };
-
-// ファイル名に付ける日付（この PC の時刻で。toISOString は世界標準時なので、日本の朝 9 時前は前の日になってしまう）
-function today() { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
-
-// 文字をファイルとしてダウンロードさせる
-function download(text, filename) {
-  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: filename });
-  document.body.append(a); a.click(); a.remove();
-}
 
 function startImport() { $('file-input').value = ''; $('file-input').click(); }
 $('m-import').onclick = () => { $('menu').close(); startImport(); };
@@ -743,21 +760,24 @@ $('m-change').onclick = async () => {
   $('menu').close();
   const pw = await askPassword({ title: 'マスターパスワードを変更', note: '新しいマスターパスワードを決めてください。変更したら、バックアップも保存し直してください。', label: '新しいマスターパスワード', twice: true });
   if (pw == null) return;
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const salt = newSalt();
   session = { ...session, key: await deriveKey(pw, salt), salt };
   await persist(); toast('マスターパスワードを変更しました');
 };
 
 // ---- 自動ロック ----
+let lastActivity = Date.now();
 for (const ev of ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll']) addEventListener(ev, () => lastActivity = Date.now(), { passive: true });
 setInterval(() => { if (session && Date.now() - lastActivity > IDLE_LOCK_MS) { lock(); toast('自動でロックしました'); } }, 15000);
 
+// ---- 始める ----
 if (!window.crypto || !crypto.subtle) {
   document.body.innerHTML = '<p class="center">このブラウザでは暗号化の機能が使えません。Chrome か Edge で開いてください。</p>';
 } else {
   for (const e of document.querySelectorAll('.app-name')) e.textContent = APP_NAME;
   document.title = APP_NAME;
-  for (const e of document.querySelectorAll('.types .ti')) e.innerHTML = svg(e.dataset.type);
+  $('version').textContent = `${APP_NAME} v${VERSION}`;
+  for (const e of document.querySelectorAll('.types .ti')) setIcon(e, e.dataset.type);
   lock();
 }
 </script>
