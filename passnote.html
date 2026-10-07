@@ -43,7 +43,7 @@
   .list { display: grid; gap: 10px; }
   .item { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
   /* 1件を1行に。列（種類・名前など・接続先・ユーザー・パスワード・編集）の幅を決めて、行ごとに縦をそろえる */
-  .item .head { display: grid; grid-template-columns: 18px minmax(12em, 1fr) 18em 12em 13em 24px; gap: 8px 12px; align-items: center; }
+  .item .head { display: grid; grid-template-columns: 18px minmax(12em, 1fr) 20em 12em 13em 24px; gap: 8px 12px; align-items: center; }
   .item .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .item .name { font-weight: 600; font-size: 16px; }
   .item .name a { color: var(--accent); text-decoration: none; }
@@ -75,6 +75,11 @@
     border-radius: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
   .types .type input { width: auto; margin: 0; }
   .types .type:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+  /* 種類で絞り込むボタン */
+  .filter { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; }
+  .filter button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+  .filter button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--chip); }
+  .filter .n { font-size: 12px; }
   .ti { display: inline-flex; width: 18px; height: 18px; flex: none; }
   .ti svg { width: 100%; height: 100%; }
   .item .ti { color: var(--muted); }
@@ -125,6 +130,7 @@
     <button id="btn-menu">その他</button>
     <button id="btn-lock">ロック</button>
   </header>
+  <div class="filter" id="type-filter" role="group" aria-label="種類で絞り込む"></div>
   <div id="list" class="list"></div>
   <p class="note" style="margin-top:16px">コピーしたパスワードは 30 秒後にクリップボードから消します（この画面を開いているとき）。5 分間操作がないと自動でロックします。</p>
 </main>
@@ -295,6 +301,7 @@ function lock() {
   session = null;
   $('list').replaceChildren();
   $('search').value = '';
+  typeFilter = '';
   for (const d of document.querySelectorAll('dialog[open]')) d.close();
   $('lock-pw').value = '';
   $('lock-error').textContent = '';
@@ -368,17 +375,33 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 
+// 種類で絞り込む（'' はすべて）。ロックすると「すべて」に戻す
+let typeFilter = '';
+function renderFilter() {
+  const count = t => session.entries.filter(x => !t || typeOf(x) === t).length;
+  $('type-filter').replaceChildren(...['', ...Object.keys(TYPES)].map(t => {
+    const b = el('button', { type: 'button', 'aria-pressed': String(t === typeFilter), onclick: () => { typeFilter = t; render(); } });
+    if (t) { const i = el('span', { class: 'ti' }); i.innerHTML = svg(t); b.append(i); }
+    b.append(t ? TYPES[t].label : 'すべて', el('span', { class: 'n' }, `${count(t)}`));
+    return b;
+  }));
+}
+
 function render() {
   if (!session) return;
+  renderFilter();
   const q = $('search').value.trim().toLowerCase();
   const items = session.entries
+    .filter(x => !typeFilter || typeOf(x) === typeFilter)
     .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)))
     .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja'));
 
   $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
 
   if (items.length === 0) {
-    $('list').replaceChildren(el('div', { class: 'empty' }, session.entries.length ? '見つかりません。' : 'まだ何もありません。「＋ 追加」から登録してください。'));
+    $('list').replaceChildren(el('div', { class: 'empty' }, session.entries.length
+      ? (typeFilter && !$('search').value.trim() ? `${TYPES[typeFilter].label} の登録はまだありません。` : '見つかりません。')
+      : 'まだ何もありません。「＋ 追加」から登録してください。'));
     return;
   }
   $('list').replaceChildren(...items.map(renderItem));
@@ -525,7 +548,7 @@ function openEdit(x) {
   $('edit-title').textContent = x ? '編集' : '追加';
   $('edit-delete').classList.toggle('hidden', !x);
   for (const [k, id] of Object.entries(fields)) $(id).value = x ? (x[k] || (k === 'level' ? 'normal' : '')) : (k === 'level' ? 'normal' : '');
-  const t = x ? typeOf(x) : 'http';
+  const t = x ? typeOf(x) : (typeFilter || 'http');   // 絞り込んでいるときは、その種類で追加を始める
   document.querySelector(`input[name="f-type"][value="${t}"]`).checked = true;
   applyType(t);
   $('f-pass').type = 'password'; $('f-pass-show').textContent = '表示';
