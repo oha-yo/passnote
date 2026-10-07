@@ -43,7 +43,7 @@
   .list { display: grid; gap: 10px; }
   .item { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
   /* 1件を1行に。列（種類・名前など・接続先・ユーザー・パスワード・編集）の幅を決めて、行ごとに縦をそろえる */
-  .item .head { display: grid; grid-template-columns: 18px minmax(12em, 1fr) 20em 12em 13em 24px; gap: 8px 12px; align-items: center; }
+  .item .head { display: grid; grid-template-columns: 14px 18px minmax(12em, 1fr) 20em 12em 13em 24px; gap: 8px 12px; align-items: center; }
   .item .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .item .name { font-weight: 600; font-size: 16px; }
   .item .name a { color: var(--accent); text-decoration: none; }
@@ -83,10 +83,18 @@
   .ti { display: inline-flex; width: 18px; height: 18px; flex: none; }
   .ti svg { width: 100%; height: 100%; }
   .item .ti { color: var(--muted); }
+  /* ドラッグで並べ替える */
+  .grip { display: inline-flex; width: 14px; height: 22px; color: var(--muted); cursor: grab; opacity: .5; touch-action: none; }
+  body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
+  .grip svg { width: 100%; height: 100%; }
+  .item:hover .grip { opacity: 1; }
+  .item.dragging { opacity: .4; }
+  .item.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+  .item.drop-after { box-shadow: 0 3px 0 var(--accent); }
   /* 狭い画面では、列をやめて折り返す */
   @media (max-width: 860px) {
     .item .head { display: flex; flex-wrap: wrap; }
-    .item .title { flex: 1 1 calc(100% - 30px); }   /* 種類のアイコンと同じ行に */
+    .item .title { flex: 1 1 calc(100% - 60px); }   /* つまみ・種類のアイコンと同じ行に */
     .item .part:empty { display: none; }
   }
   .hidden { display: none !important; }
@@ -375,6 +383,15 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 
+// 並び順。ドラッグで並べ替えると、1件ごとに order（0, 1, 2 …）を持つ。order がないもの（並べ替える前のデータ）は、
+// order があるものの後ろに、分類 → 名前の順で並べる
+function byOrder(a, b) {
+  const oa = Number.isFinite(a.order), ob = Number.isFinite(b.order);
+  if (oa && ob) return a.order - b.order;
+  if (oa !== ob) return oa ? -1 : 1;
+  return (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja');
+}
+
 // 種類で絞り込む（'' はすべて）。ロックすると「すべて」に戻す
 let typeFilter = '';
 function renderFilter() {
@@ -394,7 +411,7 @@ function render() {
   const items = session.entries
     .filter(x => !typeFilter || typeOf(x) === typeFilter)
     .filter(x => !q || [x.name, x.category, x.user, x.memo, x.url, x.host, x.db].some(s => (s || '').toLowerCase().includes(q)))
-    .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'ja') || a.name.localeCompare(b.name, 'ja'));
+    .sort(byOrder);
 
   $('cat-list').replaceChildren(...[...new Set(session.entries.map(x => x.category).filter(Boolean))].map(c => el('option', { value: c })));
 
@@ -414,6 +431,7 @@ const ICONS = {
   eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
   // 種類のアイコン
   http: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   ssh: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
@@ -475,7 +493,9 @@ function renderItem(x) {
     LEVEL[x.level] ? el('span', { class: 'chip' + (x.level === 'high' ? ' high' : '') }, LEVEL[x.level]) : null,
     // メモは名前の右に1行で出す。長いときは省略して、マウスを乗せると全文が見える
     x.memo ? el('span', { class: 'memo', title: x.memo }, x.memo.replace(/\s*\n\s*/g, ' / ')) : null);
-  const row = el('div', { class: 'head' }, icon, title);
+  const grip = el('span', { class: 'grip', title: 'ドラッグで並べ替え', 'aria-hidden': 'true' });
+  grip.innerHTML = svg('grip');
+  const row = el('div', { class: 'head' }, grip, icon, title);
 
   // 接続先（ssh・db はコマンドのコピーも）。行ごとの位置をそろえるため、空でも欄は置く
   const where = target(x);
@@ -501,7 +521,57 @@ function renderItem(x) {
     row.append(el('span', { class: 'part pass' }, el('span', { class: 'k' }, 'パスワード'), v, toggle, copyButton(x.pass, 'パスワード', true)));
   } else row.append(el('span', { class: 'part pass' }));
   row.append(iconButton('edit', '編集', () => openEdit(x)));
-  return el('div', { class: 'item' }, row);
+  const card = el('div', { class: 'item' }, row);
+  card.dataset.id = x.id;
+  grip.onpointerdown = e => startDrag(e, card);
+  return card;
+}
+
+// ---- ドラッグで並べ替え ----
+// つまみを押したまま動かすと、マウス（指）の下の行の前か後ろに線を出し、離したところに移す。
+// ブラウザ標準のドラッグ＆ドロップではなく、ポインターの動きを自分で追う（マウスでも指でも同じように動くように）
+const clearDropMarks = () => { for (const c of document.querySelectorAll('.drop-before, .drop-after')) c.classList.remove('drop-before', 'drop-after'); };
+// 落とす位置：ポインターがある行の上半分なら、その行の前。下半分なら後ろ
+function dropTarget(x, y, movingId) {
+  const card = document.elementFromPoint(x, y)?.closest('#list .item');
+  if (!card || card.dataset.id === movingId) return null;
+  const r = card.getBoundingClientRect();
+  return { card, after: y > r.top + r.height / 2 };
+}
+function startDrag(e, card) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const movingId = card.dataset.id;
+  let t = null;
+  card.classList.add('dragging');
+  document.body.classList.add('sorting');
+  const move = ev => {
+    clearDropMarks();
+    t = dropTarget(ev.clientX, ev.clientY, movingId);
+    if (t) t.card.classList.add(t.after ? 'drop-after' : 'drop-before');
+  };
+  const end = async ev => {
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', end);
+    removeEventListener('pointercancel', end);
+    card.classList.remove('dragging');
+    document.body.classList.remove('sorting');
+    clearDropMarks();
+    if (ev.type === 'pointerup' && t) await moveEntry(movingId, t.card.dataset.id, t.after);
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
+}
+async function moveEntry(moving, targetId, after) {
+  // 全体を今の並び順にして、動かすものを抜き、落とした行の前か後ろに入れ直す。そのあと順番を振り直して保存する
+  const all = [...session.entries].sort(byOrder);
+  const item = all.splice(all.findIndex(x => x.id === moving), 1)[0];
+  const at = all.findIndex(x => x.id === targetId) + (after ? 1 : 0);
+  all.splice(at, 0, item);
+  all.forEach((x, i) => { x.order = i; });
+  await persist();
+  render();
 }
 
 $('search').oninput = render;
@@ -575,7 +645,10 @@ $('edit-form').onsubmit = async e => {
   for (const k of ['url', 'host', 'port', 'db']) if (!TYPE_FIELDS[data.type].includes(k)) data[k] = '';
   if (!data.name) return;
   if (editing) Object.assign(editing, data, { updated: new Date().toISOString() });
-  else session.entries.push({ id: crypto.randomUUID(), ...data, created: new Date().toISOString() });
+  else {
+    const orders = session.entries.map(x => x.order).filter(Number.isFinite);
+    session.entries.push({ id: crypto.randomUUID(), ...data, created: new Date().toISOString(), ...(orders.length ? { order: Math.max(...orders) + 1 } : {}) });
+  }
   await persist();
   $('edit').close(); render(); toast('保存しました');
 };
