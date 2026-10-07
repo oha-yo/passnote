@@ -56,6 +56,6 @@
 - **バックアップのファイルは、このプロジェクトのフォルダに置かないでください**（Git の管理に入らないよう `.gitignore` でも除外しています）。
 
 ## 開発
-改修の方針とテストのやり方は [CLAUDE.md](CLAUDE.md)、改修の履歴は [CHANGELOG.md](CHANGELOG.md) にあります。版の番号は「その他」の画面の左下に出ます。
+改修の方針とテストのやり方は [CLAUDE.md](CLAUDE.md)、改修の履歴は [CHANGELOG.md](CHANGELOG.md) にあります。版の番号は、一覧の画面の一番下の右端（ロック画面では枠の右下）と、「その他」の画面に出ます。
 
 回帰テスト：passnote のフォルダで `python -m http.server 8765 --bind 127.0.0.1` を動かし、`http://localhost:8765/test/regress.html` を開くと、ダミーのデータで一通りの操作を自動で行い、結果を `test/expected.json` と比べます（localhost のテスト用のデータだけを使い、ふだんのデータには触れません）。

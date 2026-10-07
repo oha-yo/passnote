@@ -104,6 +104,10 @@
     .item .title { flex: 1 1 calc(100% - 60px); }   /* つまみ・種類のアイコンと同じ行に */
     .item .part:empty { display: none; }
   }
+  .version { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .center .version { display: block; text-align: right; margin-top: 12px; }
+  .foot { display: flex; gap: 12px; align-items: baseline; margin-top: 16px; }
+  .foot .note { flex: 1; margin: 0; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -123,6 +127,7 @@
     <button id="setup-restore">バックアップから復元</button>
     <button class="primary" id="setup-ok">はじめる</button>
   </div>
+  <span class="version"></span>
 </section>
 
 <!-- ロック画面 -->
@@ -134,6 +139,7 @@
   <div class="error" id="lock-error"></div>
   <div class="actions"><button class="primary" id="lock-ok">開く</button></div>
   <p style="margin:16px 0 0; text-align:right"><button type="button" class="link" id="lock-forgot">マスターパスワードを忘れた場合</button></p>
+  <span class="version"></span>
 </section>
 
 <!-- 一覧 -->
@@ -147,7 +153,10 @@
   </header>
   <div class="filter" id="type-filter" role="group" aria-label="種類で絞り込む"></div>
   <div id="list" class="list"></div>
-  <p class="note" style="margin-top:16px">コピーしたパスワードは 30 秒後にクリップボードから消します（この画面を開いているとき）。5 分間操作がないと自動でロックします。</p>
+  <div class="foot">
+    <p class="note">コピーしたパスワードは 30 秒後にクリップボードから消します（この画面を開いているとき）。5 分間操作がないと自動でロックします。</p>
+    <span class="version"></span>
+  </div>
 </main>
 
 <!-- 追加・編集 -->
@@ -211,7 +220,7 @@
     <button id="m-import">バックアップから復元（今の中身と置き換え）</button>
     <button id="m-change">マスターパスワードを変更</button>
   </div>
-  <div class="actions"><span class="note" id="version" style="margin-right:auto"></span><button id="m-close">閉じる</button></div>
+  <div class="actions"><span class="version" style="margin-right:auto"></span><button id="m-close">閉じる</button></div>
 </dialog>
 
 <!-- パスワードを聞く（復元・変更用） -->
@@ -258,7 +267,7 @@
 // 暗号化したものだけを localStorage に保存する。平文は画面を開いている間のメモリにしか置かない。
 // https://github.com/oha-yo/passnote
 const APP_NAME = '接続情報';             // 画面に出す名前（仮称）。変えるときはここだけ直す
-const VERSION = '1.0.0';                 // 変えたら CHANGELOG.md もそろえる
+const VERSION = '1.1.0';                 // 変えたら CHANGELOG.md もそろえる
 const STORE_KEY = 'pass-note-vault-v1';   // 保存のキーは、すでにデータが入っているので変えない
 const ITERATIONS = 600000;
 const CLIPBOARD_CLEAR_MS = 30000;
@@ -776,7 +785,7 @@ if (!window.crypto || !crypto.subtle) {
 } else {
   for (const e of document.querySelectorAll('.app-name')) e.textContent = APP_NAME;
   document.title = APP_NAME;
-  $('version').textContent = `${APP_NAME} v${VERSION}`;
+  for (const e of document.querySelectorAll('.version')) e.textContent = `${APP_NAME} v${VERSION}`;   // 版の番号（どの画面にも出す）
   for (const e of document.querySelectorAll('.types .ti')) setIcon(e, e.dataset.type);
   lock();
 }
