@@ -1,0 +1,635 @@
+{
+  "title": "接続情報",
+  "first": {
+    "screen": "setup",
+    "h1": "接続情報をはじめる"
+  },
+  "setupShort": "8 文字以上にしてください。",
+  "setupMismatch": "2 つの入力が一致しません。",
+  "empty": {
+    "screen": "app",
+    "filters": [
+      "重要 0［OFF］",
+      "すべて 0［選択中］",
+      "Web（http） 0",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [],
+    "empty": "まだ何もありません。「＋ 追加」から登録してください。"
+  },
+  "add": {
+    "http": {
+      "form": {
+        "type": "http",
+        "visible": [
+          "http"
+        ],
+        "port": "",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    },
+    "ssh": {
+      "form": {
+        "type": "ssh",
+        "visible": [
+          "ssh db"
+        ],
+        "port": "22",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    },
+    "ssh2": {
+      "form": {
+        "type": "ssh",
+        "visible": [
+          "ssh db"
+        ],
+        "port": "22",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    },
+    "db": {
+      "form": {
+        "type": "db",
+        "visible": [
+          "ssh db",
+          "db"
+        ],
+        "port": "5432",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    },
+    "high": {
+      "form": {
+        "type": "http",
+        "visible": [
+          "http"
+        ],
+        "port": "",
+        "level": "normal"
+      },
+      "toast": "保存しました（重要なので、「重要」を ON にすると表示されます）"
+    },
+    "nouser": {
+      "form": {
+        "type": "http",
+        "visible": [
+          "http"
+        ],
+        "port": "",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    },
+    "whileImportant": {
+      "form": {
+        "type": "db",
+        "visible": [
+          "ssh db",
+          "db"
+        ],
+        "port": "5432",
+        "level": "high"
+      },
+      "toast": "保存しました"
+    },
+    "whileType": {
+      "form": {
+        "type": "db",
+        "visible": [
+          "ssh db",
+          "db"
+        ],
+        "port": "5432",
+        "level": "normal"
+      },
+      "toast": "保存しました（重要なので、「重要」を ON にすると表示されます）"
+    },
+    "afterDrag": {
+      "form": {
+        "type": "ssh",
+        "visible": [
+          "ssh db"
+        ],
+        "port": "22",
+        "level": "normal"
+      },
+      "toast": "保存しました"
+    }
+  },
+  "listed": {
+    "screen": "app",
+    "filters": [
+      "重要 1［OFF］",
+      "すべて 5［選択中］",
+      "Web（http） 2",
+      "SSH 2",
+      "データベース（PostgreSQL） 1"
+    ],
+    "rows": [
+      "ダミーのメモだけ パスワード •••••••• ¦ Web（http）",
+      "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login",
+      "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+      "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders",
+      "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+    ],
+    "empty": null
+  },
+  "search": {
+    "example.local": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+        "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+      ],
+      "empty": null
+    },
+    "ADMIN": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login"
+      ],
+      "empty": null
+    },
+    "orders": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders"
+      ],
+      "empty": null
+    },
+    "社内": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+        "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders",
+        "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+      ],
+      "empty": null
+    },
+    "金庫": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login"
+      ],
+      "empty": null
+    },
+    "銀行": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [],
+      "empty": "見つかりません。（重要のものは「重要」を ON にすると探せます）"
+    },
+    "zzz": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5［選択中］",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [],
+      "empty": "見つかりません。（重要のものは「重要」を ON にすると探せます）"
+    }
+  },
+  "type": {
+    "Web": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5",
+        "Web（http） 2［選択中］",
+        "SSH 2",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーのメモだけ パスワード •••••••• ¦ Web（http）",
+        "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login"
+      ],
+      "empty": null
+    },
+    "SSH": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5",
+        "Web（http） 2",
+        "SSH 2［選択中］",
+        "データベース（PostgreSQL） 1"
+      ],
+      "rows": [
+        "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+        "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+      ],
+      "empty": null
+    },
+    "データベース": {
+      "screen": "app",
+      "filters": [
+        "重要 1［OFF］",
+        "すべて 5",
+        "Web（http） 2",
+        "SSH 2",
+        "データベース（PostgreSQL） 1［選択中］"
+      ],
+      "rows": [
+        "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders"
+      ],
+      "empty": null
+    }
+  },
+  "typeAndSearch": {
+    "screen": "app",
+    "filters": [
+      "重要 1［OFF］",
+      "すべて 5",
+      "Web（http） 2",
+      "SSH 2［選択中］",
+      "データベース（PostgreSQL） 1"
+    ],
+    "rows": [
+      "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+    ],
+    "empty": null
+  },
+  "importantOn": {
+    "screen": "app",
+    "filters": [
+      "重要 1［ON］",
+      "すべて 1［選択中］",
+      "Web（http） 1",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [
+      "ダミーの銀行 重要 接続先 bank.example.com ユーザー dummy-bank パスワード •••••••• ¦ Web（http） ¦ https://bank.example.com/|https://bank.example.com/"
+    ],
+    "empty": null
+  },
+  "importantSearch": {
+    "screen": "app",
+    "filters": [
+      "重要 1［ON］",
+      "すべて 1［選択中］",
+      "Web（http） 1",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [
+      "ダミーの銀行 重要 接続先 bank.example.com ユーザー dummy-bank パスワード •••••••• ¦ Web（http） ¦ https://bank.example.com/|https://bank.example.com/"
+    ],
+    "empty": null
+  },
+  "importantAfterAdd": {
+    "screen": "app",
+    "filters": [
+      "重要 2［ON］",
+      "すべて 2［選択中］",
+      "Web（http） 1",
+      "SSH 0",
+      "データベース（PostgreSQL） 1"
+    ],
+    "rows": [
+      "ダミーの銀行 重要 接続先 bank.example.com ユーザー dummy-bank パスワード •••••••• ¦ Web（http） ¦ https://bank.example.com/|https://bank.example.com/",
+      "ダミーの重要DB 重要 接続先 db-main.example.local/core ユーザー dba パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h db-main.example.local -p 5432 -U dba -d core"
+    ],
+    "empty": null
+  },
+  "importantOff": {
+    "screen": "app",
+    "filters": [
+      "重要 2［OFF］",
+      "すべて 5［選択中］",
+      "Web（http） 2",
+      "SSH 2",
+      "データベース（PostgreSQL） 1"
+    ],
+    "rows": [
+      "ダミーのメモだけ パスワード •••••••• ¦ Web（http）",
+      "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login",
+      "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+      "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders",
+      "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222 ユーザー o'neil パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh 'o'\\''neil@bastion.example.local' -p 2222"
+    ],
+    "empty": null
+  },
+  "passShown": "パスワード dummy-pass-SSH",
+  "passHidden": "パスワード ••••••••",
+  "drag": {
+    "mark1": "item drop-before",
+    "after1": [
+      "ダミーのメモだけ",
+      "ダミーの管理画面",
+      "ダミーのWebサーバー",
+      "ダミーの受注DB",
+      "ダミーの踏み台"
+    ],
+    "mark2": "item drop-after",
+    "after2": [
+      "ダミーのメモだけ",
+      "ダミーの管理画面",
+      "ダミーの受注DB",
+      "ダミーのWebサーバー",
+      "ダミーの踏み台"
+    ],
+    "afterAdd": [
+      "ダミーのメモだけ",
+      "ダミーの管理画面",
+      "ダミーの受注DB",
+      "ダミーのWebサーバー",
+      "ダミーの踏み台",
+      "ダミーの新サーバー"
+    ]
+  },
+  "editOpen": {
+    "title": "編集",
+    "type": "ssh",
+    "host": "bastion.example.local",
+    "port": "2222",
+    "user": "o'neil",
+    "level": "low"
+  },
+  "editSwitchedPort": "2222",
+  "editToast": "保存しました",
+  "deleteToast": "削除しました",
+  "afterEdit": {
+    "screen": "app",
+    "filters": [
+      "重要 3［OFF］",
+      "すべて 5［選択中］",
+      "Web（http） 2",
+      "SSH 1",
+      "データベース（PostgreSQL） 2"
+    ],
+    "rows": [
+      "ダミーのメモだけ パスワード •••••••• ¦ Web（http）",
+      "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login",
+      "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders",
+      "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+      "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222/jump ユーザー o'neil パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h bastion.example.local -p 2222 -U 'o'\\''neil' -d jump"
+    ],
+    "empty": null
+  },
+  "stored": {
+    "keys": [
+      "app",
+      "v",
+      "iter",
+      "salt",
+      "iv",
+      "ct"
+    ],
+    "app": "pass-note",
+    "v": 1,
+    "iter": 600000,
+    "entries": [
+      {
+        "category": "Web サービス",
+        "db": "",
+        "host": "",
+        "level": "normal",
+        "memo": "二段階認証あり\n予備コードは金庫",
+        "name": "ダミーの管理画面",
+        "order": 4,
+        "pass": "dummy-pass-WEB",
+        "port": "",
+        "type": "http",
+        "url": "https://admin.example.com/login",
+        "user": "admin"
+      },
+      {
+        "category": "社内サーバー",
+        "db": "",
+        "host": "web01.example.local",
+        "level": "normal",
+        "memo": "",
+        "name": "ダミーのWebサーバー",
+        "order": 6,
+        "pass": "dummy-pass-SSH",
+        "port": "22",
+        "type": "ssh",
+        "url": "",
+        "user": "deploy"
+      },
+      {
+        "category": "社内サーバー",
+        "db": "jump",
+        "host": "bastion.example.local",
+        "level": "low",
+        "memo": "",
+        "name": "ダミーの踏み台",
+        "order": 7,
+        "pass": "dummy-pass-BAS",
+        "port": "2222",
+        "type": "db",
+        "url": "",
+        "user": "o'neil"
+      },
+      {
+        "category": "社内サーバー",
+        "db": "orders",
+        "host": "192.0.2.10",
+        "level": "normal",
+        "memo": "",
+        "name": "ダミーの受注DB",
+        "order": 5,
+        "pass": "dummy-pass-DB",
+        "port": "5432",
+        "type": "db",
+        "url": "",
+        "user": "app_user"
+      },
+      {
+        "category": "",
+        "db": "",
+        "host": "",
+        "level": "high",
+        "memo": "",
+        "name": "ダミーの銀行",
+        "order": 0,
+        "pass": "dummy-pass-BANK",
+        "port": "",
+        "type": "http",
+        "url": "https://bank.example.com/",
+        "user": "dummy-bank"
+      },
+      {
+        "category": "",
+        "db": "",
+        "host": "",
+        "level": "normal",
+        "memo": "",
+        "name": "ダミーのメモだけ",
+        "order": 3,
+        "pass": "dummy-pass-ONLY",
+        "port": "",
+        "type": "http",
+        "url": "",
+        "user": ""
+      },
+      {
+        "category": "",
+        "db": "core",
+        "host": "db-main.example.local",
+        "level": "high",
+        "memo": "",
+        "name": "ダミーの重要DB",
+        "order": 1,
+        "pass": "dummy-pass-CORE",
+        "port": "5432",
+        "type": "db",
+        "url": "",
+        "user": "dba"
+      },
+      {
+        "category": "",
+        "db": "dwh",
+        "host": "dwh.example.local",
+        "level": "high",
+        "memo": "",
+        "name": "ダミーの分析DB",
+        "order": 2,
+        "pass": "dummy-pass-DWH",
+        "port": "5432",
+        "type": "db",
+        "url": "",
+        "user": "analyst"
+      }
+    ]
+  },
+  "backup": {
+    "name": "pass-note-backup-YYYY-MM-DD.json",
+    "entries": 8,
+    "toast": "バックアップを保存しました"
+  },
+  "locked": {
+    "screen": "lock",
+    "h1": "接続情報"
+  },
+  "wrongPw": "パスワードが違います",
+  "unlocked": {
+    "screen": "app",
+    "filters": [
+      "重要 3［OFF］",
+      "すべて 5［選択中］",
+      "Web（http） 2",
+      "SSH 1",
+      "データベース（PostgreSQL） 2"
+    ],
+    "rows": [
+      "ダミーのメモだけ パスワード •••••••• ¦ Web（http）",
+      "ダミーの管理画面 Web サービス 二段階認証あり / 予備コードは金庫 接続先 admin.example.com ユーザー admin パスワード •••••••• ¦ Web（http） ¦ https://admin.example.com/login|https://admin.example.com/login",
+      "ダミーの受注DB 社内サーバー 接続先 192.0.2.10/orders ユーザー app_user パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h 192.0.2.10 -p 5432 -U app_user -d orders",
+      "ダミーのWebサーバー 社内サーバー 接続先 web01.example.local ユーザー deploy パスワード •••••••• ¦ SSH ¦ ssh のコマンドをコピー：ssh deploy@web01.example.local",
+      "ダミーの踏み台 社内サーバー 低い 接続先 bastion.example.local:2222/jump ユーザー o'neil パスワード •••••••• ¦ データベース（PostgreSQL） ¦ psql のコマンドをコピー：psql -h bastion.example.local -p 2222 -U 'o'\\''neil' -d jump"
+    ],
+    "empty": null
+  },
+  "changeToast": "マスターパスワードを変更しました",
+  "changedOpensWithNew": 8,
+  "restoreAsk": "バックアップから復元",
+  "restoreToast": "3 件を復元しました",
+  "restored": {
+    "screen": "app",
+    "filters": [
+      "重要 1［OFF］",
+      "すべて 2［選択中］",
+      "Web（http） 2",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [
+      "ダミーのルーター 社内 低い 型番 XX-1 ユーザー admin パスワード •••••••• ¦ Web（http）",
+      "ダミーの社内Wiki 社内 パスワード帳のころのデータ 接続先 wiki.example.local ユーザー dummy-user パスワード •••••••• ¦ Web（http） ¦ https://wiki.example.local/|https://wiki.example.local/"
+    ],
+    "empty": null
+  },
+  "restoredImportant": {
+    "screen": "app",
+    "filters": [
+      "重要 1［ON］",
+      "すべて 1［選択中］",
+      "Web（http） 1",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [
+      "ダミーの銀行 お金 重要 接続先 bank.example.com ユーザー dummy-bank パスワード •••••••• ¦ Web（http） ¦ https://bank.example.com/|https://bank.example.com/"
+    ],
+    "empty": null
+  },
+  "fixtureScreen": "lock",
+  "fixtureOpened": {
+    "screen": "app",
+    "filters": [
+      "重要 1［OFF］",
+      "すべて 2［選択中］",
+      "Web（http） 2",
+      "SSH 0",
+      "データベース（PostgreSQL） 0"
+    ],
+    "rows": [
+      "ダミーのルーター 社内 低い 型番 XX-1 ユーザー admin パスワード •••••••• ¦ Web（http）",
+      "ダミーの社内Wiki 社内 パスワード帳のころのデータ 接続先 wiki.example.local ユーザー dummy-user パスワード •••••••• ¦ Web（http） ¦ https://wiki.example.local/|https://wiki.example.local/"
+    ],
+    "empty": null
+  },
+  "reset": {
+    "open": true,
+    "disabled0": true,
+    "disabledWrong": true,
+    "disabledRight": false,
+    "file": "pass-note-backup-before-reset-YYYY-MM-DD.json",
+    "sameAsStored": true,
+    "storageAfter": null,
+    "screen": "setup",
+    "toast": "初期化しました。新しいマスターパスワードを決めてください。"
+  }
+}
